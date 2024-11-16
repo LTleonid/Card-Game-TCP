@@ -3,7 +3,7 @@
 #include <set>
 #include <SFML/Network.hpp>
 using namespace std;
-#pragma comment(linker, "/ignore:4099")
+
 
 // Содержит JACK, QUEEN, KING, ACE, JOCKER
 enum suite { JACK, QUEEN, KING, ACE, JOCKER };
