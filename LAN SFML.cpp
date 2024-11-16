@@ -14,7 +14,7 @@ struct Data {
     int type;
     bool accusation;
     vector<int> cards;
-   
+    Data() : type{ -1 } {}
     Data(int type, bool lie) : type{ type }, accusation{ lie } {}
     Data(int type, vector<int> cards) : type{ type }, cards{ cards } {}
     sf::Packet get() {
@@ -76,13 +76,16 @@ string cardName(int cardIndex) {
 
 class Player {
 private:
+    
     sf::IpAddress ip;
     int uid;
     vector<int> cards;
+    sf::TcpSocket socket = sf::TcpSocket();
 
 protected:
     string name;
-
+    enum Status { play = 0, turn, waiting };
+    int status = Status::waiting;
     sf::IpAddress getIP() const { return this->ip; }
     int getUID() const { return this->uid; }
     vector<int> getCards() { return cards; }
@@ -104,32 +107,42 @@ protected:
     }
 
 public:
-    Player(string name, int uid) : name{ name }, uid{ uid } {
+    Player(string name, int uid ) : name{ name }, uid{ uid } {
         ip = sf::IpAddress::getLocalAddress(); // Получаем локальный IP
+
     }
 
     int getQuanityCards() { return cards.size(); }
 
     void coutCards() {
+        int i = 0;
         for (int card : cards) {
-            cout << cardName(card) << " | ";
+            cout << i << ". " << cardName(card) << " | ";
+            i++;
         }
         cout << endl;
     }
     
     // Подключение к серверу
-    void connectServer(sf::IpAddress ip, unsigned short port, sf::TcpSocket& socket) {
+    void connectServer(sf::IpAddress ip, unsigned short port) {
         if (socket.connect(ip, port) != sf::Socket::Done)
             return;
         cout << "Connected to server " << ip << endl;
         sf::Packet packet;
+
         if (socket.receive(packet) == sf::Socket::Done) {
-            packet >> cards;
+            packet >> this->status;
+        }
+        if (this->status == Status::play) {
+            if (socket.receive(packet) == sf::Socket::Done) {
+                packet >> cards;
+            }
+            startGame();
         }
     }
     
     // Отправка данных на сервер
-    int sendData(Data data, sf::TcpSocket& socket) {
+    int sendData(Data data) {
         sf::Packet p = data.get();
         if (socket.send(p) == sf::Socket::Done) {
             cout << "Data sent to server" << endl;
@@ -140,7 +153,38 @@ public:
 
         return -2;
     }
-
+    void startGame() {
+        int action;
+        set<int> cardUses;
+        Data data;
+        coutCards();
+        if (status == Status::turn) {
+            cout << "Your Action: 1.put cards 2. Say accusation";
+            cin >> action;
+            switch (action)
+            {
+            case 1:
+                while (cardUses.size() != 6) {
+                    cout << "Enter index cards(7 for exit): ";
+                    cin >> action;
+                    if (action == 7) break;
+                    if (cardUses.count(action)) cout << "Error: You alread enter it!" << endl;
+                    else {
+                        cardUses.insert(action);
+                    }
+                }
+                data.type = Type::place;
+                
+                for (int card : cardUses) {
+                    data.cards.push_back(this->putCard(card));
+                }
+                sendData(data);
+               
+            default:
+                break;
+            }
+        }
+    };
 
 
 };
@@ -247,14 +291,13 @@ int main() {
     cout << "Enter mode (1 - Client 2 - Server): ";
     cin >> u;
     if (u == gameMode::CLIENT) {
-        sf::TcpSocket socket;
         Player p("PlayerName", 123);
-        p.connectServer(sf::IpAddress::getLocalAddress(), 53000, socket);
+        p.connectServer(sf::IpAddress::getLocalAddress(), 53000);
         vector<int> cards{ 1,2,3 };
         Data data(Type::place, cards);
         while (true) {
             sf::sleep(sf::seconds(1));
-            p.sendData(data, socket);
+            p.sendData(data);
         }
     }
     else if (u == gameMode::SERVER) {
