@@ -7,8 +7,9 @@ using namespace std;
 
 // Содержит JACK, QUEEN, KING, ACE, JOCKER
 enum suite { JACK, QUEEN, KING, ACE, JOCKER };
+// Положил карту | Обвинения
 enum Type { place = 0, accusation = 1 };
-
+enum gameMode { Server = 0, Client = 1 };
 struct Data {
     int type;
     bool accusation;
@@ -20,17 +21,12 @@ struct Data {
         sf::Packet p;
         if (type == Type::accusation) {
             p << type << accusation;
-            cout << "Packet created for accusation: type = " << type
-                << ", accusation = " << accusation << endl;
         }
         else if (type == Type::place) {
             p << type << cards.size();
-            cout << "Packet created for place: type = " << type
-                << ", cards = ";
             for (int card : cards) {
                 cout << card << " ";
                 p << card;
-                cout << p;
             }
             cout << endl;
         }
@@ -136,6 +132,9 @@ public:
         }
         return -2;
     }
+
+
+
 };
 
 // Пример класса Server
@@ -184,8 +183,10 @@ public:
             cout << "Error: Failed to receive data." << endl;
         }
     }
-
+    
 };
+
+
 
 int main() {
     
