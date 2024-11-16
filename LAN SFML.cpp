@@ -51,6 +51,7 @@ sf::Packet& operator <<(sf::Packet& packet, const vector<int>& d) {
 sf::Packet& operator >>(sf::Packet& packet, vector<int>& d) {
     int size;
     packet >> size;
+    d.clear();
     for (int i = 0; i < size; ++i) {
         int value;
         packet >> value;
@@ -115,21 +116,28 @@ public:
         }
         cout << endl;
     }
-
+    
     // Подключение к серверу
     void connectServer(sf::IpAddress ip, unsigned short port, sf::TcpSocket& socket) {
         if (socket.connect(ip, port) != sf::Socket::Done)
             return;
         cout << "Connected to server " << ip << endl;
+        sf::Packet packet;
+        if (socket.receive(packet) == sf::Socket::Done) {
+            packet >> cards;
+        }
     }
     
     // Отправка данных на сервер
     int sendData(Data data, sf::TcpSocket& socket) {
         sf::Packet p = data.get();
         if (socket.send(p) == sf::Socket::Done) {
-            cout << "Data sent" << endl;
-            return 0;
+            cout << "Data sent to server" << endl;
         }
+        else {
+            cout << "Error sending data to server" << endl;
+        }
+
         return -2;
     }
 
@@ -141,75 +149,92 @@ public:
 // Пример класса Server
 class Server : public Player {
 private:
-    unsigned short int port = 53000;
-    vector<int> deck;
+
     vector<Player*> players;
-    vector<sf::TcpSocket> clients;
+    vector<sf::TcpSocket* > clients;
+
+    unsigned short int port = 53000;
+
+    sf::SocketSelector selector;
+    sf::TcpListener listener;
+    
+
+    vector<int> deck;
     vector<int> getDeck() const {
         return deck;
     }
     void appendDeck(int card) {
         deck.push_back(card);
     }
+
 public:
     unsigned short int getPort() {
         return port;
     }
-    Server(string name, int uid) : Player(name, uid) {}
-    void startServer() {
-        sf::TcpListener listener;
-        listener.setBlocking(false);
-        if (listener.listen(port) != sf::Socket::Done) {
-            cout << "Error: Server failed to start." << endl;
-            return;
-        }
-        cout << "Server is listening on port " << port << endl;
-
-        sf::TcpSocket client;
+    Server(string name, int uid) : Player(name, uid) {
+        listener.listen(port);
+        selector.add(listener);
+        listener.setBlocking(true);
         
-        if (listener.accept(client) != sf::Socket::Done) {
-            cout << "Error: Failed to accept client." << endl;
-            return;
-        }
+    }
+    void startServer() {
 
-        cout << "Client connected." << endl;
-
-    
+        
+        cout << "Server is listening on port " << port << endl;
         while (true) {
-            if (listener.NotReady) {
-                for (int card : getDeck()) {
-                    cout << card << endl;
-                }
-            }
-            else{
-                sf::Packet packet;
-                if (client.receive(packet) == sf::Socket::Done) {
-                    int type;
-                    packet >> type;
-                    if (type == Type::accusation) {
-                        bool lie;
-                        packet >> lie;
-                        cout << "Accusation received: " << (lie ? "True" : "False") << endl;
-                    }
-                    if (type == Type::place) {
-                        int quanity;
-                        packet >> quanity;
-                        packet >> deck;
-                        cout << "Received cards: ";
-                        for (int card : deck) {
-                            appendDeck(card);
-                        }
-                        cout << endl;
+            if (selector.wait(sf::milliseconds(100))) {
+                cout << "Selector is ready" << endl;
+                if (selector.isReady(listener)) {
+                    cout << "New connection detected" << endl;
+                    sf::TcpSocket* client = new sf::TcpSocket;
+                    if (listener.accept(*client) == sf::Socket::Done) {
+                        clients.push_back(client);
+                        selector.add(*client);
+                        cout << "Received new connection: " << client->getRemoteAddress() << endl;
                     }
                     else {
-                        cout << "Error: Failed to receive data." << endl;
+                        delete client;
                     }
+                }
+                else {
+                    
+                    for (auto Pclient : clients) {
+                        sf::TcpSocket& client = *Pclient;
+                        if (selector.isReady(client)) {
+                            sf::Packet packet;
+                            if (client.receive(packet) == sf::Socket::Done) {
+                                int type;
+                                packet >> type;
+                                if (type == Type::accusation) {
+                                    bool lie;
+                                    packet >> lie;
+                                    cout << "Accusation received: " << (lie ? "True" : "False") << endl;
+                                }
+                                else if (type == Type::place) {
+                                    int quantity;
+                                    packet >> quantity;
+
+                                    vector<int> receivedDeck;
+                                    packet >> receivedDeck;
+
+                                    cout << "Received cards: ";
+                                    for (int card : receivedDeck) {
+                                        appendDeck(card);
+                                        cout << cardName(card) << " | ";  // Выводим карту
+                                    }
+                                    cout << endl;
+                                }
+                                else {
+                                    cout << "Error: Failed to receive data." << endl;
+                                }
+                            }
+                        }
+                    }
+
                 }
             }
             
-        
         }
-        
     }
     
 };
@@ -227,7 +252,10 @@ int main() {
         p.connectServer(sf::IpAddress::getLocalAddress(), 53000, socket);
         vector<int> cards{ 1,2,3 };
         Data data(Type::place, cards);
-        p.sendData(data, socket);
+        while (true) {
+            sf::sleep(sf::seconds(1));
+            p.sendData(data, socket);
+        }
     }
     else if (u == gameMode::SERVER) {
         Server s("Server", 1);
