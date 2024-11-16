@@ -3,8 +3,7 @@
 #include <set>
 #include <SFML/Network.hpp>
 using namespace std;
-
-#pragma warning(disable : 4099)
+#pragma comment(linker, "/ignore:4099")
 
 // Содержит JACK, QUEEN, KING, ACE, JOCKER
 enum suite { JACK, QUEEN, KING, ACE, JOCKER };
@@ -130,9 +129,7 @@ public:
     
     // Отправка данных на сервер
     int sendData(Data data, sf::TcpSocket& socket) {
-
         sf::Packet p = data.get();
-        
         if (socket.send(p) == sf::Socket::Done) {
             cout << "Data sent" << endl;
             return 0;
