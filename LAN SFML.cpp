@@ -9,7 +9,7 @@ using namespace std;
 enum suite { JACK, QUEEN, KING, ACE, JOCKER };
 // Положил карту | Обвинения
 enum Type { place = 0, accusation = 1 };
-enum gameMode { Server = 0, Client = 1 };
+enum gameMode { SERVER = 2, CLIENT = 1 };
 struct Data {
     int type;
     bool accusation;
@@ -137,20 +137,36 @@ public:
 
 };
 
+
 // Пример класса Server
 class Server : public Player {
-public:
-    Server(string name, int uid) : Player(name, uid) {}
+private:
+    unsigned short int port = 53000;
     vector<int> deck;
+    vector<Player*> players;
+    vector<sf::TcpSocket> clients;
+    vector<int> getDeck() const {
+        return deck;
+    }
+    void appendDeck(int card) {
+        deck.push_back(card);
+    }
+public:
+    unsigned short int getPort() {
+        return port;
+    }
+    Server(string name, int uid) : Player(name, uid) {}
     void startServer() {
         sf::TcpListener listener;
-        if (listener.listen(53000) != sf::Socket::Done) {
+        listener.setBlocking(false);
+        if (listener.listen(port) != sf::Socket::Done) {
             cout << "Error: Server failed to start." << endl;
             return;
         }
-        cout << "Server is listening on port 53000" << endl;
+        cout << "Server is listening on port " << port << endl;
 
         sf::TcpSocket client;
+        
         if (listener.accept(client) != sf::Socket::Done) {
             cout << "Error: Failed to accept client." << endl;
             return;
@@ -158,30 +174,42 @@ public:
 
         cout << "Client connected." << endl;
 
-        sf::Packet packet;
-        if (client.receive(packet) == sf::Socket::Done) {
-            int type;
-            packet >> type;
-            if (type == Type::accusation) {
-                bool lie;
-                packet >> lie;
-                cout << "Accusation received: " << (lie ? "True" : "False") << endl;
-            }
-            if (type == Type::place) {
-                int quanity;
-                packet >> quanity;
-                packet >> deck;    
-                cout << "Received cards: ";
-                for (int card : deck) {
-                    cout << card << " ";
+    
+        while (true) {
+            if (listener.NotReady) {
+                for (int card : getDeck()) {
+                    cout << card << endl;
                 }
-                cout << endl;
             }
-
+            else{
+                sf::Packet packet;
+                if (client.receive(packet) == sf::Socket::Done) {
+                    int type;
+                    packet >> type;
+                    if (type == Type::accusation) {
+                        bool lie;
+                        packet >> lie;
+                        cout << "Accusation received: " << (lie ? "True" : "False") << endl;
+                    }
+                    if (type == Type::place) {
+                        int quanity;
+                        packet >> quanity;
+                        packet >> deck;
+                        cout << "Received cards: ";
+                        for (int card : deck) {
+                            appendDeck(card);
+                        }
+                        cout << endl;
+                    }
+                    else {
+                        cout << "Error: Failed to receive data." << endl;
+                    }
+                }
+            }
+            
+        
         }
-        else {
-            cout << "Error: Failed to receive data." << endl;
-        }
+        
     }
     
 };
@@ -193,7 +221,7 @@ int main() {
     int u;
     cout << "Enter mode (1 - Client 2 - Server): ";
     cin >> u;
-    if (u == 1) {
+    if (u == gameMode::CLIENT) {
         sf::TcpSocket socket;
         Player p("PlayerName", 123);
         p.connectServer(sf::IpAddress::getLocalAddress(), 53000, socket);
@@ -201,7 +229,7 @@ int main() {
         Data data(Type::place, cards);
         p.sendData(data, socket);
     }
-    else if (u == 2) {
+    else if (u == gameMode::SERVER) {
         Server s("Server", 1);
         s.startServer();
     }
