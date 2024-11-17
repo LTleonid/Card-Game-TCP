@@ -8,7 +8,7 @@ using namespace std;
 // Содержит JACK, QUEEN, KING, ACE, JOCKER
 enum suite { JACK, QUEEN, KING, ACE, JOCKER };
 // Положил карту | Обвинения
-enum Type { place = 0, accusation = 1 };
+enum Type { place = 0, accusation = 1, startDeck = 3 };
 enum gameMode { SERVER = 2, CLIENT = 1 };
 struct Data {
     int type;
@@ -22,14 +22,11 @@ struct Data {
         if (type == Type::accusation) {
             p << type << accusation;
         }
-        else if (type == Type::place) {
-            p << type << cards.size();
-            for (int card : cards) {
-                cout << card << " ";
-                p << card;
-            }
+        else if (type == Type::place or type == Type::startDeck) {
+            p << type << cards.size() << cards;
             cout << endl;
         }
+        
         else {
             cout << "Error: Undefined Type Data" << endl;
             return sf::Packet();
@@ -76,7 +73,7 @@ string cardName(int cardIndex) {
 
 class Player {
 private:
-
+        
     sf::IpAddress ip;
     int uid;
     vector<int> cards;
@@ -84,7 +81,7 @@ private:
 
 protected:
     string name;
-    enum Status { play = 0, turn, waiting };
+    enum Status { ready = 0, turn, waiting, getCards };
     int status = Status::waiting;
     sf::IpAddress getIP() const { return this->ip; }
     int getUID() const { return this->uid; }
@@ -158,36 +155,45 @@ public:
     void startGame() {
         cout << "start Game" << endl;
         int action;
+        int type;
         set<int> cardUses;
         Data data;
-        coutCards();
-        sf::Packet packet = reciveData();
-        packet >> status;
-        cout << status << endl;
-        if (status == Status::turn) {
-            cout << "Your Action: 1.put cards 2. Say accusation";
-            cin >> action;
-            switch (action)
-            {
-            case 1:
-                while (cardUses.size() != 6) {
-                    cout << "Enter index cards(7 for exit): ";
-                    cin >> action;
-                    if (action == 7) break;
-                    if (cardUses.count(action)) cout << "Error: You alread enter it!" << endl;
-                    else {
-                        cardUses.insert(action);
+        sf::Packet packet;
+        while (true)
+        {
+            packet = reciveData();
+            packet >> type;
+            if(type == Status::)
+            coutCards();
+            
+
+            packet >> status;
+            cout << status << endl;
+            if (status == Status::turn) {
+                cout << "Your Action: 1.put cards 2. Say accusation";
+                cin >> action;
+                switch (action)
+                {
+                case 1:
+                    while (cardUses.size() != 6) {
+                        cout << "Enter index cards(7 for exit): ";
+                        cin >> action;
+                        if (action == 7) break;
+                        if (cardUses.count(action)) cout << "Error: You alread enter it!" << endl;
+                        else {
+                            cardUses.insert(action);
+                        }
                     }
-                }
-                data.type = Type::place;
+                    data.type = Type::place;
 
-                for (int card : cardUses) {
-                    data.cards.push_back(this->putCard(card));
-                }
-                sendData(data);
+                    for (int card : cardUses) {
+                        data.cards.push_back(this->putCard(card));
+                    }
+                    sendData(data);
 
-            default:
-                break;
+                default:
+                    break;
+                }
             }
         }
     };
@@ -238,8 +244,7 @@ public:
                     cout << "Player " << Splayer.getRemoteAddress() << " is ready!" << endl;
                 }
                 else {
-                    cout << "Error: Failed to send 'ready' packet to player at "
-                        << Splayer.getRemoteAddress() << endl;
+                    cout << "Error: Failed to send ready" << Splayer.getRemoteAddress() << endl;
                 }
             }
             else {
