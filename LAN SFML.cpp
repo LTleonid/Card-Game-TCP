@@ -2,39 +2,9 @@
 #include <vector>
 #include <set>
 #include <SFML/Network.hpp>
+#include <random>
+#include <stack>
 using namespace std;
-
-
-// Содержит JACK, QUEEN, KING, ACE, JOCKER
-enum suite { JACK, QUEEN, KING, ACE, JOCKER };
-// Положил карту | Обвинения
-enum Type { place = 0, accusation = 1, startDeck = 3 };
-enum gameMode { SERVER = 2, CLIENT = 1 };
-struct Data {
-    int type;
-    bool accusation;
-    vector<int> cards;
-    Data() : type{ -1 } {}
-    Data(int type, bool lie) : type{ type }, accusation{ lie } {}
-    Data(int type, vector<int> cards) : type{ type }, cards{ cards } {}
-    sf::Packet get() {
-        sf::Packet p;
-        if (type == Type::accusation) {
-            p << type << accusation;
-        }
-        else if (type == Type::place or type == Type::startDeck) {
-            p << type << cards.size() << cards;
-            cout << endl;
-        }
-        
-        else {
-            cout << "Error: Undefined Type Data" << endl;
-            return sf::Packet();
-        }
-        return p;
-    }
-
-};
 
 sf::Packet& operator <<(sf::Packet& packet, const vector<int>& d) {
     int size = d.size();
@@ -56,6 +26,40 @@ sf::Packet& operator >>(sf::Packet& packet, vector<int>& d) {
     }
     return packet;
 }
+
+// Содержит JACK, QUEEN, KING, ACE, JOCKER
+enum suite { JACK, QUEEN, KING, ACE, JOCKER };
+// Положил карту | Обвинения
+enum Type { place = 0, accusation = 1, startDeck = 3 };
+enum gameMode { SERVER = 2, CLIENT = 1 };
+struct Data {
+    int type;
+    bool accusation;
+    vector<int> cards;
+    Data() : type{ -1 } {}
+    Data(int type, bool lie) : type{ type }, accusation{ lie } {}
+    Data(int type, vector<int> cards) : type{ type }, cards{ cards } {}
+    sf::Packet get() {
+        sf::Packet p;
+        if (type == Type::accusation) {
+            p << type << accusation;
+        }
+        else if (type == Type::place ) {
+            p << type << cards.size() << cards;
+        }
+        else if (type == Type::startDeck) {
+            p << type << cards;
+        }
+        else {
+            cout << "Error: Undefined Type Data" << endl;
+            return sf::Packet();
+        }
+        return p;
+    }
+
+};
+
+
 
 
 // Разменование карт по индексу
@@ -81,7 +85,7 @@ private:
 
 protected:
     string name;
-    enum Status { ready = 0, turn, waiting, getCards };
+    enum Status { ready = 0, turn, waiting};
     int status = Status::waiting;
     sf::IpAddress getIP() const { return this->ip; }
     int getUID() const { return this->uid; }
@@ -126,6 +130,10 @@ public:
         if (socket.connect(ip, port) != sf::Socket::Done)
             return;
         cout << "Connected to server " << ip << endl;
+        sf::Packet packet;
+        if (socket.receive(packet) == sf::Socket::Done) {
+            packet >> status;
+        }
     }
 
     // Отправка данных на сервер
@@ -133,12 +141,14 @@ public:
         sf::Packet p = data.get();
         if (socket.send(p) == sf::Socket::Done) {
             cout << "Data sent to server" << endl;
+            return 0;
         }
         else {
             cout << "Error sending data to server" << endl;
+            return -2;
         }
-
-        return -2;
+        
+        
     }
 
     sf::Packet reciveData() {
@@ -154,19 +164,24 @@ public:
 
     void startGame() {
         cout << "start Game" << endl;
+        
         int action;
         int type;
         set<int> cardUses;
         Data data;
         sf::Packet packet;
+        packet = reciveData();
+        packet >> type;
+        if (type == Type::startDeck) {
+            packet >> cards;
+        }
+        else {
+            cout << "Error: Don't get Cards" << endl;
+        }
         while (true)
-        {
-            packet = reciveData();
-            packet >> type;
-            if(type == Status::)
+        {     
             coutCards();
-            
-
+            packet = reciveData();
             packet >> status;
             cout << status << endl;
             if (status == Status::turn) {
@@ -190,13 +205,16 @@ public:
                         data.cards.push_back(this->putCard(card));
                     }
                     sendData(data);
-
+                    break;
                 default:
                     break;
                 }
             }
+            else if (status == Status::waiting) {
+                cout << "Waiting turn" << endl;
+            }
         }
-    };
+    }
 
 
 };
@@ -220,6 +238,12 @@ private:
     void appendDeck(int card) {
         deck.push_back(card);
     }
+    int jCards; // Jack
+    int qCards; // Queen
+    int kCards; // King
+    int aCards; // Ace
+    int JCards; // Joker
+    int quantityCards;
 
 public:
     unsigned short int getPort() {
@@ -237,7 +261,7 @@ public:
             sf::TcpSocket& Splayer = *player;
             if (Splayer.getRemoteAddress() != sf::IpAddress::None) { // Проверяем, что сокет активен
                 sf::Packet packet;
-                int status = Player::Status::play;
+                int status = Player::Status::ready;
                 packet << status;
 
                 if (Splayer.send(packet) == sf::Socket::Done) { // Отправляем пакет
@@ -246,13 +270,55 @@ public:
                 else {
                     cout << "Error: Failed to send ready" << Splayer.getRemoteAddress() << endl;
                 }
+                giveCards(Splayer);
+                
             }
             else {
                 cout << "Error: Socket is disconnected or unavailable for player." << endl;
             }
         }
     }
+    
+    void giveCards(sf::TcpSocket& player) {
+        if (InitializationDeck()) {
+            sf::Packet packet;
+            packet << Type::startDeck;
+            if (player.send(packet) == sf::Socket::Done) {
+                packet.clear();
+                vector<int> cards;
+                for (int i = 0; i < 6; i++ ) cards.push_back( getCardfromDeck());
+                packet << cards;
+                if (player.send(packet) == sf::Socket::Done) {
+                    cout << "Player " << player.getRemoteAddress() << "Get: ";
+                    for (int card : cards) {
+                        cout << cardName(card) << endl;
+                    }
+                }
+                
+            }
+        }
+    }
 
+    int getCardfromDeck() {
+        int copy = getDeck()[0];
+        getDeck().pop_back();
+        return copy;
+    }
+
+    int InitializationDeck() {
+        if (getDeck().empty()) {
+         
+            for (int i = 0; i < jCards; i++) appendDeck(JACK);
+            for (int i = 0; i < qCards; i++) appendDeck(QUEEN);
+            for (int i = 0; i < kCards; i++) appendDeck(KING);
+            for (int i = 0; i < aCards; i++) appendDeck(ACE);
+            for (int i = 0; i < JCards; i++) appendDeck(JOCKER);
+
+            mt19937 rng = default_random_engine(time(NULL));
+            shuffle(getDeck().begin(), getDeck().end(), rng);
+        }
+        return 1;
+    }
 
     void startServer() {
         cout << "Server is listening on port " << port << endl;
