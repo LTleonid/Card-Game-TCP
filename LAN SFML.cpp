@@ -129,13 +129,6 @@ public:
         if (socket.connect(ip, port) != sf::Socket::Done)
             return;
         cout << "Connected to server " << ip << endl;
-        sf::Packet packet;
-
-        if (socket.receive(packet) == sf::Socket::Done) {
-            packet >> this->status;
-            cout << status;
-        }
-        
     }
     
     // Отправка данных на сервер
@@ -150,11 +143,27 @@ public:
 
         return -2;
     }
+
+    sf::Packet reciveData() {
+        sf::Packet p;
+        if (socket.receive(p) == sf::Socket::Done) {
+            return p;
+        }
+        else {
+            cout << "Error: Failure recive data" << endl;
+            return sf::Packet();
+        }
+    }
+
     void startGame() {
+        cout << "start Game" << endl;
         int action;
         set<int> cardUses;
         Data data;
         coutCards();
+        sf::Packet packet = reciveData();
+        packet >> status;
+        cout << status << endl;
         if (status == Status::turn) {
             cout << "Your Action: 1.put cards 2. Say accusation";
             cin >> action;
@@ -220,20 +229,52 @@ public:
     void Ready() {
         for (auto player : clients) {
             sf::TcpSocket& Splayer = *player;
-            if (selector.isReady(Splayer)) {
+            if (Splayer.getRemoteAddress() != sf::IpAddress::None) { // Проверяем, что сокет активен
                 sf::Packet packet;
-                packet << Player::Status::play;
-                if (Splayer.send(packet) == sf::Socket::Done) {
-                    cout << "Players Ready!" << endl;
+                int status = Player::Status::play; // Явно задаём статус
+                packet << status; // Упаковываем статус в пакет
+
+                if (Splayer.send(packet) == sf::Socket::Done) { // Отправляем пакет
+                    cout << "Player " << Splayer.getRemoteAddress() << " is ready!" << endl;
                 }
                 else {
-                    cout << "Error: Player unreacheble" << endl;
+                    cout << "Error: Failed to send 'ready' packet to player at "
+                        << Splayer.getRemoteAddress() << endl;
                 }
+            }
+            else {
+                cout << "Error: Socket is disconnected or unavailable for player." << endl;
+            }
+        }
+    }
+
+    
+    void startServer() {
+        cout << "Server is listening on port " << port << endl;
+        while (true) {
+            if (clients.size() != maxPlayer) {
+                cout << clients.size();
+                if (selector.wait(sf::milliseconds(100))) {
+
+                    if (selector.isReady(listener)) {
+                        cout << "New connection detected" << endl;
+                        sf::TcpSocket* client = new sf::TcpSocket;
+                        if (listener.accept(*client) == sf::Socket::Done) {
+                            clients.push_back(client);
+                            selector.add(*client);
+                            cout << "Received new connection: " << client->getRemoteAddress() << ":" << client->getRemotePort() << endl;
+                        }
+                        else {
+                            delete client;
+                        }
+                    }
+                }
+            }
+            else {
+                break;
             }
 
         }
-    }
-    void StartGame() {
         Ready();
         for (auto Pclient : clients) {
             sf::TcpSocket& client = *Pclient;
@@ -268,34 +309,6 @@ public:
             }
         }
     }
-    void startServer() {
-
-
-        cout << "Server is listening on port " << port << endl;
-        while (true) {
-            if (clients.size() != maxPlayer) {
-                if (selector.wait(sf::milliseconds(100))) {
-
-                    if (selector.isReady(listener)) {
-                        cout << "New connection detected" << endl;
-                        sf::TcpSocket* client = new sf::TcpSocket;
-                        if (listener.accept(*client) == sf::Socket::Done) {
-                            clients.push_back(client);
-                            selector.add(*client);
-                            cout << "Received new connection: " << client->getRemoteAddress() << endl;
-                        }
-                        else {
-                            delete client;
-                        }
-                    }
-                }
-            }
-            else {
-                startGame();
-            }
-
-        }
-    }
 
 };
 
@@ -308,7 +321,7 @@ int main() {
     if (u == gameMode::CLIENT) {
         Player p("PlayerName", 123);
         p.connectServer(sf::IpAddress::getLocalAddress(), 53000);
-       
+        p.startGame();
         
     }
     else if (u == gameMode::SERVER) {
