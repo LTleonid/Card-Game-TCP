@@ -76,7 +76,7 @@ string cardName(int cardIndex) {
 
 class Player {
 private:
-    
+
     sf::IpAddress ip;
     int uid;
     vector<int> cards;
@@ -107,11 +107,11 @@ protected:
     }
 
 public:
-    Player(string name, int uid ) : name{ name }, uid{ uid } {
+    Player(string name, int uid) : name{ name }, uid{ uid } {
         ip = sf::IpAddress::getLocalAddress(); // Получаем локальный IP
 
     }
-    
+
     int getQuanityCards() { return cards.size(); }
 
 
@@ -123,14 +123,14 @@ public:
         }
         cout << endl;
     }
-    
+
     // Подключение к серверу
     void connectServer(sf::IpAddress ip, unsigned short port) {
         if (socket.connect(ip, port) != sf::Socket::Done)
             return;
         cout << "Connected to server " << ip << endl;
     }
-    
+
     // Отправка данных на сервер
     int sendData(Data data) {
         sf::Packet p = data.get();
@@ -180,12 +180,12 @@ public:
                     }
                 }
                 data.type = Type::place;
-                
+
                 for (int card : cardUses) {
                     data.cards.push_back(this->putCard(card));
                 }
                 sendData(data);
-               
+
             default:
                 break;
             }
@@ -231,7 +231,7 @@ public:
             sf::TcpSocket& Splayer = *player;
             if (Splayer.getRemoteAddress() != sf::IpAddress::None) { // Проверяем, что сокет активен
                 sf::Packet packet;
-                int status = Player::Status::play; 
+                int status = Player::Status::play;
                 packet << status;
 
                 if (Splayer.send(packet) == sf::Socket::Done) { // Отправляем пакет
@@ -248,7 +248,7 @@ public:
         }
     }
 
-    
+
     void startServer() {
         cout << "Server is listening on port " << port << endl;
         while (true) {
@@ -314,7 +314,7 @@ public:
 
 
 int main() {
-    
+
     int u;
     cout << "Enter mode (1 - Client 2 - Server): ";
     cin >> u;
@@ -322,7 +322,7 @@ int main() {
         Player p("PlayerName", 123);
         p.connectServer(sf::IpAddress::getLocalAddress(), 53000);
         p.startGame();
-        
+
     }
     else if (u == gameMode::SERVER) {
         Server s("Server", 1, 1);
@@ -331,4 +331,3 @@ int main() {
     cin >> u;
     return 0;
 }
-
