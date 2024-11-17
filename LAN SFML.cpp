@@ -231,8 +231,8 @@ public:
             sf::TcpSocket& Splayer = *player;
             if (Splayer.getRemoteAddress() != sf::IpAddress::None) { // Проверяем, что сокет активен
                 sf::Packet packet;
-                int status = Player::Status::play; // Явно задаём статус
-                packet << status; // Упаковываем статус в пакет
+                int status = Player::Status::play; 
+                packet << status;
 
                 if (Splayer.send(packet) == sf::Socket::Done) { // Отправляем пакет
                     cout << "Player " << Splayer.getRemoteAddress() << " is ready!" << endl;
@@ -298,7 +298,7 @@ public:
                         cout << "Received cards: ";
                         for (int card : receivedDeck) {
                             appendDeck(card);
-                            cout << cardName(card) << " | ";  // Выводим карту
+                            cout << cardName(card) << " | "; 
                         }
                         cout << endl;
                     }
