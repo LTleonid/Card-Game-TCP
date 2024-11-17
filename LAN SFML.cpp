@@ -24,7 +24,7 @@ sf::Packet& operator >>(sf::Packet& packet, vector<int>& d) {
         packet >> value;
         d.push_back(value);
     }
-    return packet;
+    return packet >> d;
 }
 
 // Содержит JACK, QUEEN, KING, ACE, JOCKER
