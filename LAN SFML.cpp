@@ -45,7 +45,7 @@ struct Data {
         if (type == Type::accusation) {
             p << type << accusation;
         }
-        else if (type == Type::place ) {
+        else if (type == Type::place) {
             p << type << cards.size() << cards;
         }
         else if (type == Type::startDeck) {
@@ -78,7 +78,7 @@ string cardName(int cardIndex) {
 
 class Player {
 private:
-        
+
     sf::IpAddress ip;
     int uid;
     vector<int> cards;
@@ -86,7 +86,7 @@ private:
 
 protected:
     string name;
-    enum Status { ready = 0, turn, waiting};
+    enum Status { ready = 0, turn, waiting };
     int status = Status::waiting;
     sf::IpAddress getIP() const { return this->ip; }
     int getUID() const { return this->uid; }
@@ -148,8 +148,8 @@ public:
             cout << "Error sending data to server" << endl;
             return -2;
         }
-        
-        
+
+
     }
 
     sf::Packet reciveData() {
@@ -165,7 +165,7 @@ public:
 
     void startGame() {
         cout << "start Game" << endl;
-        
+
         int action;
         int type;
         set<int> cardUses;
@@ -186,7 +186,7 @@ public:
             cout << "Error: Don't get Cards" << endl;
         }
         while (true)
-        {     
+        {
             coutCards();
             packet = reciveData();
             packet >> status;
@@ -200,8 +200,8 @@ public:
 
                     while (cardUses.size() != 6) {
                         cout << "\033[2J";
-                        for (int i = 0; i < getCards().size(); i++){
-                            cout << (cardUses.count(i)? "\033[48;0;255;255m" : "") << cardName(getCards()[i]) << " | ";
+                        for (int i = 0; i < getCards().size(); i++) {
+                            cout << (cardUses.count(i) ? "\033[48;0;255;255m" : "") << cardName(getCards()[i]) << " | ";
                         }
                         cout << endl;
                         cout << "Enter index cards(7 for exit): ";
@@ -212,7 +212,7 @@ public:
                             cardUses.insert(action);
                         }
                     }
-                    
+
                     for (int card : cardUses) {
                         temp.push_back(putCard(card));
                     }
@@ -261,11 +261,11 @@ public:
     unsigned short int getPort() {
         return port;
     }
-    Server(string name, int uid, int maxPlayer) : Player(name, uid), maxPlayer{ maxPlayer } , jCards { 6 }, qCards{ 6 }, kCards{ 6 }, aCards{ 6 }, JCards{ 3 } {
+    Server(string name, int uid, int maxPlayer) : Player(name, uid), maxPlayer{ maxPlayer }, jCards{ 6 }, qCards{ 6 }, kCards{ 6 }, aCards{ 6 }, JCards{ 3 } {
         listener.listen(port);
         selector.add(listener);
         listener.setBlocking(true);
-        
+
     }
 
     void Ready() {
@@ -283,14 +283,14 @@ public:
                     cout << "Error: Failed to send ready" << Splayer.getRemoteAddress() << endl;
                 }
                 giveCards(Splayer);
-                
+
             }
             else {
                 cout << "Error: Socket is disconnected or unavailable for player." << endl;
             }
         }
     }
-    
+
     void giveCards(sf::TcpSocket& player) {
         if (InitializationDeck()) {
             sf::Packet packet;
@@ -298,7 +298,7 @@ public:
             if (player.send(packet) == sf::Socket::Done) {
                 packet.clear();
                 vector<int> cards;
-                for (int i = 0; i < 6; i++ ) cards.push_back( getCardfromDeck());
+                for (int i = 0; i < 6; i++) cards.push_back(getCardfromDeck());
                 packet << cards;
                 if (player.send(packet) == sf::Socket::Done) {
                     cout << "Player " << player.getRemoteAddress() << "Get: ";
@@ -306,7 +306,7 @@ public:
                         cout << cardName(card) << endl;
                     }
                 }
-                
+
             }
         }
     }
@@ -321,7 +321,7 @@ public:
 
     int InitializationDeck() {
         if (deck.empty()) {
-         
+
             for (int i = 0; i < jCards; i++) appendDeck(JACK);
             for (int i = 0; i < qCards; i++) appendDeck(QUEEN);
             for (int i = 0; i < kCards; i++) appendDeck(KING);
