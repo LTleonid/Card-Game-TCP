@@ -298,7 +298,7 @@ public:
                         cout << "Received cards: ";
                         for (int card : receivedDeck) {
                             appendDeck(card);
-                            cout << cardName(card) << " | "; 
+                            cout << cardName(card) << " | ";
                         }
                         cout << endl;
                     }
