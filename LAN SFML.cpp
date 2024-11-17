@@ -36,6 +36,7 @@ struct Data {
     int type;
     bool accusation;
     vector<int> cards;
+    set<int> cardsUses;
     Data() : type{ -1 } {}
     Data(int type, bool lie) : type{ type }, accusation{ lie } {}
     Data(int type, vector<int> cards) : type{ type }, cards{ cards } {}
@@ -168,12 +169,18 @@ public:
         int action;
         int type;
         set<int> cardUses;
+        vector<int> temp;
+
         Data data;
         sf::Packet packet;
+
         packet = reciveData();
         packet >> type;
+
         if (type == Type::startDeck) {
             packet >> cards;
+            cout << "Get cards: ";
+            coutCards();
         }
         else {
             cout << "Error: Don't get Cards" << endl;
@@ -190,7 +197,13 @@ public:
                 switch (action)
                 {
                 case 1:
+
                     while (cardUses.size() != 6) {
+                        cout << "\033[2J";
+                        for (int i = 0; i < getCards().size(); i++){
+                            cout << (cardUses.count(i)? "\033[48;0;255;255m" : "") << cardName(getCards()[i]) << " | ";
+                        }
+                        cout << endl;
                         cout << "Enter index cards(7 for exit): ";
                         cin >> action;
                         if (action == 7) break;
@@ -199,12 +212,11 @@ public:
                             cardUses.insert(action);
                         }
                     }
-                    data.type = Type::place;
-
+                    
                     for (int card : cardUses) {
-                        data.cards.push_back(this->putCard(card));
+                        temp.push_back(putCard(card));
                     }
-                    sendData(data);
+                    sendData(Data(Type::place, temp));
                     break;
                 default:
                     break;
@@ -249,11 +261,11 @@ public:
     unsigned short int getPort() {
         return port;
     }
-    Server(string name, int uid, int maxPlayer) : Player(name, uid), maxPlayer{ maxPlayer } {
+    Server(string name, int uid, int maxPlayer) : Player(name, uid), maxPlayer{ maxPlayer } , jCards { 6 }, qCards{ 6 }, kCards{ 6 }, aCards{ 6 }, JCards{ 3 } {
         listener.listen(port);
         selector.add(listener);
         listener.setBlocking(true);
-
+        
     }
 
     void Ready() {
