@@ -7,15 +7,13 @@
 using namespace std;
 
 sf::Packet& operator <<(sf::Packet& packet, const vector<int>& d) {
-    int size = d.size();
-    packet << size;
     for (int value : d) {
         packet << value;
     }
     return packet;
 }
 
-sf::Packet& operator >>(sf::Packet& packet, vector<int>& d) {
+vector<int> operator >>(sf::Packet& packet, vector<int>& d) {
     int size;
     packet >> size;
     d.clear();
@@ -24,7 +22,7 @@ sf::Packet& operator >>(sf::Packet& packet, vector<int>& d) {
         packet >> value;
         d.push_back(value);
     }
-    return packet >> d;
+    return d;
 }
 
 // Содержит JACK, QUEEN, KING, ACE, JOCKER
@@ -49,7 +47,7 @@ struct Data {
             p << type << cards.size() << cards;
         }
         else if (type == Type::startDeck) {
-            p << type << cards;
+            p << type << cards.size() << cards;
         }
         else {
             cout << "Error: Undefined Type Data" << endl;
@@ -180,6 +178,9 @@ public:
         if (type == Type::startDeck) {
             packet >> cards;
             cout << "Get cards: ";
+            for (int card : cards) {
+                cout << cardName(card) << endl;
+            }
             coutCards();
         }
         else {
@@ -282,6 +283,7 @@ public:
                 else {
                     cout << "Error: Failed to send ready" << Splayer.getRemoteAddress() << endl;
                 }
+                InitializationDeck();
                 giveCards(Splayer);
 
             }
@@ -292,30 +294,31 @@ public:
     }
 
     void giveCards(sf::TcpSocket& player) {
-        if (InitializationDeck()) {
-            sf::Packet packet;
-            packet << Type::startDeck;
-            if (player.send(packet) == sf::Socket::Done) {
-                packet.clear();
-                vector<int> cards;
-                for (int i = 0; i < 6; i++) cards.push_back(getCardfromDeck());
-                packet << cards;
-                if (player.send(packet) == sf::Socket::Done) {
-                    cout << "Player " << player.getRemoteAddress() << "Get: ";
-                    for (int card : cards) {
-                        cout << cardName(card) << endl;
-                    }
-                }
 
+
+        sf::Packet packet;
+        packet << Type::startDeck;
+        if (player.send(packet) == sf::Socket::Done) {
+            packet.clear();
+            vector<int> cards;
+            for (int i = 0; i < 6; i++) cards.push_back(getCardfromDeck());
+            packet << cards;
+            if (player.send(packet) == sf::Socket::Done) {
+                cout << "Player " << player.getRemoteAddress() << "Get: ";
+                packet >> cards;
+                for (int card : cards) {
+                    cout << cardName(card) << endl;
+                }
             }
+
         }
+
     }
 
     int getCardfromDeck() {
         int copy = deck[0];
         cout << "Get " << cardName(copy) << endl;
-        this->deck.erase(deck.begin());
-        cout << "now on zero " << cardName(deck[0]) << endl;
+        this->deck.erase(deck.begin());;
         return copy;
     }
 
@@ -364,10 +367,20 @@ public:
 
         }
         Ready();
+        
         for (auto Pclient : clients) {
             sf::TcpSocket& client = *Pclient;
             if (selector.isReady(client)) {
                 sf::Packet packet;
+                packet << Status::turn;
+                if (client.send(packet) == sf::Socket::Done) {
+                    cout << "Turn: " << client.getRemoteAddress() << endl;
+                }
+                else {
+                    cout << "get out " << client.getRemoteAddress();
+                }
+                cout << "Wait card";
+                packet.clear();
                 if (client.receive(packet) == sf::Socket::Done) {
                     int type;
                     packet >> type;
