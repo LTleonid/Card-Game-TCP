@@ -244,7 +244,7 @@ private:
 
 
     vector<int> deck;
-    vector<int> getDeck() const {
+    vector<int> getDeck() {
         return deck;
     }
     void appendDeck(int card) {
@@ -312,13 +312,15 @@ public:
     }
 
     int getCardfromDeck() {
-        int copy = getDeck()[0];
-        getDeck().pop_back();
+        int copy = deck[0];
+        cout << "Get " << cardName(copy) << endl;
+        this->deck.erase(deck.begin());
+        cout << "now on zero " << cardName(deck[0]) << endl;
         return copy;
     }
 
     int InitializationDeck() {
-        if (getDeck().empty()) {
+        if (deck.empty()) {
          
             for (int i = 0; i < jCards; i++) appendDeck(JACK);
             for (int i = 0; i < qCards; i++) appendDeck(QUEEN);
@@ -327,7 +329,10 @@ public:
             for (int i = 0; i < JCards; i++) appendDeck(JOCKER);
 
             mt19937 rng = default_random_engine(time(NULL));
-            shuffle(getDeck().begin(), getDeck().end(), rng);
+            shuffle(deck.begin(), deck.end(), rng);
+            for (int card : deck) {
+                cout << cardName(card) << endl;
+            }
         }
         return 1;
     }
