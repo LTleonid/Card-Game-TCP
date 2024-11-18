@@ -8,8 +8,10 @@
 using namespace std;
 
 sf::Packet& operator <<(sf::Packet& packet, const vector<int>& d) {
-    packet << static_cast<int>(d.size()); // Сначала записываем размер
+    cout << "PACKET sen: " << (int)d.size() << endl;
+    packet << (int)d.size(); // Почему то size не даёт int по умолчанию
     for (int value : d) {
+        cout << "PACKET sen: " << value << endl; // Где то тут пробелма
         packet << value; // Затем сами элементы
     }
     return packet;
@@ -18,10 +20,12 @@ sf::Packet& operator <<(sf::Packet& packet, const vector<int>& d) {
 sf::Packet& operator >>(sf::Packet& packet, vector<int>& d) {
     int size;
     packet >> size; // Сначала считываем размер
+    cout << "PACKET rec: " << size << endl;
     d.clear();
     for (int i = 0; i < size; ++i) {
         int value;
         packet >> value;
+        cout << "PACKET rec: " << value << endl;
         d.push_back(value); // Затем считываем элементы
     }
     return packet;
@@ -47,10 +51,10 @@ struct Data {
             p << type << accusation;
         }
         else if (type == Type::place) {
-            p << type << cards.size() << cards;
+            p << type << cards;
         }
         else if (type == Type::startDeck) {
-            p << type << cards.size() << cards;
+            p << type << cards;
         }
         else {
             cout << "Error: Undefined Type Data" << endl;
@@ -93,7 +97,7 @@ protected:
     int getUID() const { return this->uid; }
     vector<int> getCards() { return cards; }
 
-    int putCard(int index) {
+    int getCard(int index) {
         if (index >= 0 && index < cards.size()) {
             int copy = cards[index];
             cards.erase(cards.begin() + index);
@@ -104,7 +108,27 @@ protected:
             return -1;
         }
     }
-
+    vector<int> putCard(set<int> cardIndex) {
+        vector<int> cards;
+        if (cardIndex.size() > getCards().size()) { cout << "SIZE ERROR" << endl; return vector<int>{}; } // Проверка размера
+        int tmp = 0;
+        for (int i : cardIndex) {
+            cout << i;
+            if (i > 5) { cout << "Index Error" << endl; return vector<int>{}; } //Проверка карты
+            if (tmp > 0) {
+                cards.push_back(getCard(i - 1 * tmp));
+            }
+            else {
+                cards.push_back(getCard(i));
+            }
+            ++tmp;
+        }
+        cout << "CARDS: ";
+        for (int card : cards) {
+            cout << cardName(card) << endl;
+        }
+        return cards;
+    }
     void setCards(vector<int> newCards) {
         this->cards = newCards;
     }
@@ -190,32 +214,32 @@ public:
                 packet >> status;
                 cout << status << endl;
                 if (status == Status::turn) {
-                    cout << "Your Action: 1.put cards 2. Say accusation";
+                    cout << "Your Action: 1.put cards 2. Say accusation: ";
                     cin >> action;
                     switch (action)
                     {
                     case 1:
-
+                        cardUses.clear();
+                        temp.clear();
                         while (cardUses.size() != 6) {
                             cout << "\033[2J";
+                            cout << "\033[0;0f";
                             for (int i = 0; i < getCards().size(); i++) {
-                                cout << (cardUses.count(i) ? "\033[48;0;255;255m" : "") << cardName(getCards()[i]) << " | ";
+                                cout << (cardUses.count(i) ? "\033[38;5;11m"+to_string(i) + ". " : to_string(i)+". ") << cardName(getCards()[i]) << "\033[0m | ";
                             }
                             cout << endl;
-                            cout << "Enter index cards(7 for exit): ";
+                            cout << "Enter index cards(7 for exit, re-enter for undo): ";
                             cin >> action;
                             if (action == 7) break;
-                            if (cardUses.count(action)) cout << "Error: You alread enter it!" << endl;
+                            if (cardUses.count(action)) cardUses.erase(action);
                             else {
                                 cardUses.insert(action);
+                                
                             }
                         }
-
-                        for (int card : cardUses) {
-                            temp.push_back(putCard(card));
-                        }
+                        
                         data.type = Type::place;
-                        data.cards = temp;
+                        data.cards = putCard(cardUses);
                         sendData(data);
                         break;
                     default:
@@ -405,14 +429,14 @@ public:
                     else if (type == Type::place) {
                         int quantity;
                         packet >> quantity;
-
+                        cout << quantity;
                         vector<int> receivedDeck;
                         packet >> receivedDeck;
-
                         cout << "Received cards: ";
                         for (int card : receivedDeck) {
-                            appendDeck(card);
                             cout << cardName(card) << " | ";
+                            appendDeck(card);
+                            
                         }
                         cout << endl;
                     }
