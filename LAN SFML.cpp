@@ -163,77 +163,72 @@ public:
 
 
     void startGame() {
-        cout << "start Game" << endl;
+        if (status == Player::Status::ready) {
+            cout << "start Game" << endl;
 
-        sf::Packet packet;
-        int type;
-
-        // Получение стартовых карт
-        packet = reciveData();
-        packet >> type;
-
-        if (type == Type::startDeck) {
-            packet >> cards;
-        }
-        else {
-            cout << "Error: Don't get Cards" << endl;
-        }
-
-        while (true) {
-            coutCards();
+            sf::Packet packet;
+            int type;
+            int action;
+            set<int> cardUses;
+            vector<int> temp;
+            Data data;
+            // Получение стартовых карт
             packet = reciveData();
-            if (!packet) {
-                cout << "Error: Failed to receive data." << std::endl;
-                continue;
-            }
-            packet >> status;
-            cout << "Status: " << status << std::endl;
-            if (status == Status::turn) {
-                cout << "Your Action: 1.put cards 2. Say accusation";
-                int action;
-                cin >> action;
+            packet >> type;
 
-                if (action == 1) {
-                    vector<int> selectedCards;
-                    set<int> usedIndices;
-
-                    while (true) {
-                        cout << "Your Action: 1.put cards 2. Say accusation: ";
-                        int index;
-                        cin >> index;
-
-                        if (index == 7) break;
-                        if (usedIndices.count(index)) {
-                            cout << "Error: You alread enter it!" << endl;
-                        }
-                        else if (index >= 0 && index < cards.size()) {
-                            usedIndices.insert(index);
-                            selectedCards.push_back(cards[index]);
-                        }
-                        else {
-                            cout << "Error: out of Index" << endl;
-                        }
-                    }
-
-                    // Отправляем данные на сервер
-                    Data data(Type::place, selectedCards);
-                    sendData(data);
-
-                }
-                else {
-                    cout << "Error: Unknown Action" << endl;
-                }
-            }
-            else if (status == Status::waiting) {
-                std::cout << "Waiting for your turn..." << std::endl;
+            if (type == Type::startDeck) {
+                packet >> cards;
             }
             else {
-                std::cout << "Error: Unknown status received: " << status << std::endl;
+                cout << "Error: Don't get Cards" << endl;
+            }
+
+            while (true)
+            {
+                coutCards();
+                packet = reciveData();
+                packet >> status;
+                cout << status << endl;
+                if (status == Status::turn) {
+                    cout << "Your Action: 1.put cards 2. Say accusation";
+                    cin >> action;
+                    switch (action)
+                    {
+                    case 1:
+
+                        while (cardUses.size() != 6) {
+                            cout << "\033[2J";
+                            for (int i = 0; i < getCards().size(); i++) {
+                                cout << (cardUses.count(i) ? "\033[48;0;255;255m" : "") << cardName(getCards()[i]) << " | ";
+                            }
+                            cout << endl;
+                            cout << "Enter index cards(7 for exit): ";
+                            cin >> action;
+                            if (action == 7) break;
+                            if (cardUses.count(action)) cout << "Error: You alread enter it!" << endl;
+                            else {
+                                cardUses.insert(action);
+                            }
+                        }
+
+                        for (int card : cardUses) {
+                            temp.push_back(putCard(card));
+                        }
+                        data.type = Type::place;
+                        data.cards = temp;
+                        sendData(data);
+                        break;
+                    default:
+                        break;
+                    }
+                }
+                else if (status == Status::waiting) {
+                    cout << "Waiting turn" << endl;
+                }
             }
         }
     }
-
-};
+ };
 
 
 class Server : public Player {
@@ -271,29 +266,41 @@ public:
         listener.setBlocking(true);
 
     }
-
+    bool sendPacket(sf::Packet& packet, sf::TcpSocket& Rx) {
+        cout << "Send Packet " << packet.getData() << " to " << Rx.getRemoteAddress() << ":" << Rx.getRemotePort() << endl;
+        if (Rx.send(packet) == sf::Socket::Done) {
+            cout << "Success!" << endl;
+            packet.clear();
+            return true;
+        }
+        else {
+            cout << "Error: Cannot send packet!" << endl;
+            return false;
+        }
+        cout << "Error: it has not send anything" << endl;
+        return false;
+    }
     void Ready() {
+        InitializationDeck();
         for (auto player : clients) {
             sf::TcpSocket& Splayer = *player;
-            if (Splayer.getRemoteAddress() != sf::IpAddress::None) { // Проверяем, что сокет активен
-                sf::Packet packet;
-                int status = Player::Status::ready;
-                packet << status;
+            // Проверяем, что сокет активен
+            sf::Packet packet;
+            int status = Player::Status::ready;
+            packet << status;
 
-                if (Splayer.send(packet) == sf::Socket::Done) { // Отправляем пакет
-                    cout << "Player " << Splayer.getRemoteAddress() << " is ready!" << endl;
-                }
-                else {
-                    cout << "Error: Failed to send ready" << Splayer.getRemoteAddress() << endl;
-                }
-                InitializationDeck();
-                giveCards(Splayer);
-
+            if (sendPacket(packet, Splayer)) { // Отправляем пакет
+                cout << "Player " << Splayer.getRemoteAddress() << " is ready!" << endl;
             }
             else {
-                cout << "Error: Socket is disconnected or unavailable for player." << endl;
+                cout << "Error: Failed to send ready" << Splayer.getRemoteAddress() << endl;
             }
+            
+            giveCards(Splayer);
+
         }
+
+        
     }
 
     void giveCards(sf::TcpSocket& player) {
@@ -307,7 +314,7 @@ public:
 
         packet << Type::startDeck << cards;
 
-        if (player.send(packet) == sf::Socket::Done) {
+        if (sendPacket(packet, player)) {
             cout << "Player " << player.getRemoteAddress() << "Get: ";
             for (int card : cards) {
                 cout << cardName(card) << " ";
@@ -371,50 +378,53 @@ public:
             }
 
         }
+
         Ready();
         while (true) {
             for (auto Pclient : clients) {
                 sf::TcpSocket& client = *Pclient;
-                if (selector.isReady(client)) {
-                    sf::Packet packet;
-                    packet.clear();
-                    packet << Status::turn;
-                    if (client.send(packet) == sf::Socket::Done) {
-                        cout << "Turn: " << client.getRemoteAddress() << endl;
+                cout << "Checking: " << client.getRemoteAddress() << ":" << client.getRemotePort() << endl;
+                sf::Packet packet;
+                packet << Status::turn;
+                if (sendPacket(packet, client)) {
+                    cout << "Turn: " << client.getRemoteAddress() << endl;
+                }
+                else {
+                    cout << "get out " << client.getRemoteAddress();
+                }
+                cout << "Wait card" << endl;
+
+                if (client.receive(packet) == sf::Socket::Done) {
+                    int type;
+                    packet >> type;
+                    if (type == Type::accusation) {
+                        bool lie;
+                        packet >> lie;
+                        cout << "Accusation received: " << (lie ? "True" : "False") << endl;
+                    }
+                    else if (type == Type::place) {
+                        int quantity;
+                        packet >> quantity;
+
+                        vector<int> receivedDeck;
+                        packet >> receivedDeck;
+
+                        cout << "Received cards: ";
+                        for (int card : receivedDeck) {
+                            appendDeck(card);
+                            cout << cardName(card) << " | ";
+                        }
+                        cout << endl;
                     }
                     else {
-                        cout << "get out " << client.getRemoteAddress();
-                    }
-                    cout << "Wait card";
-                    packet.clear();
-                    if (client.receive(packet) == sf::Socket::Done) {
-                        int type;
-                        packet >> type;
-                        if (type == Type::accusation) {
-                            bool lie;
-                            packet >> lie;
-                            cout << "Accusation received: " << (lie ? "True" : "False") << endl;
-                        }
-                        else if (type == Type::place) {
-                            int quantity;
-                            packet >> quantity;
-
-                            vector<int> receivedDeck;
-                            packet >> receivedDeck;
-
-                            cout << "Received cards: ";
-                            for (int card : receivedDeck) {
-                                appendDeck(card);
-                                cout << cardName(card) << " | ";
-                            }
-                            cout << endl;
-                        }
-                        else {
-                            cout << "Error: Failed to receive data." << endl;
-                        }
+                        cout << "Error: Failed to receive data." << endl;
                     }
                 }
+                else {
+                    cout << "Error: Selector unready" << endl;
+                }
             }
+
         }
     }
 
