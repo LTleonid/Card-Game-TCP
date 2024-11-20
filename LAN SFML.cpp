@@ -278,13 +278,14 @@ private:
     int kCards; // King
     int aCards; // Ace
     int JCards; // Joker
-    int quantityCards;
 
 public:
     unsigned short int getPort() {
         return port;
     }
+    //Name UID maxPlayer
     Server(string name, int uid, int maxPlayer) : Player(name, uid), maxPlayer{ maxPlayer }, jCards{ 6 }, qCards{ 6 }, kCards{ 6 }, aCards{ 6 }, JCards{ 3 } {
+
         listener.listen(port);
         selector.add(listener);
         listener.setBlocking(true);
@@ -430,10 +431,10 @@ public:
                         int quantity;
                         packet >> quantity;
                         cout << quantity;
-                        vector<int> receivedDeck;
-                        packet >> receivedDeck;
                         cout << "Received cards: ";
-                        for (int card : receivedDeck) {
+                        int card;
+                        for (int i = 0; i < quantity; i++) {
+                            packet >> card;
                             cout << cardName(card) << " | ";
                             appendDeck(card);
                             
@@ -486,7 +487,7 @@ int main(int argc, char** argv) {
             p.startGame();
         }
         else if (u == gameMode::SERVER) {
-            Server s("Server", 1, 1);
+            Server s("Server", 1, 2); //Name
             s.startServer();
         }
     }
