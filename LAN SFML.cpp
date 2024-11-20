@@ -95,7 +95,7 @@ protected:
     int status = Status::waiting;
     sf::IpAddress getIP() const { return this->ip; }
     int getUID() const { return this->uid; }
-    int UIDprev;
+    int playerPrev;
     vector<int> getCards() { return cards; }
 
     int getCard(int index) {
@@ -160,8 +160,9 @@ public:
         cout << "Connected to server " << ip << endl;
         sf::Packet packet;
         if (socket.receive(packet) == sf::Socket::Done) {
-            packet >> status;
+            packet >> status >> playerPrev;
         }
+        cout << playerPrev;
     }
 
     // Отправка данных на сервер
@@ -318,23 +319,25 @@ public:
         return false;
     }
     void Ready() {
+        
         InitializationDeck();
-        for (auto player : clients) {
-            sf::TcpSocket& Splayer = *player;
-            // Проверяем, что сокет активен
+        int tmp = 0;
+        for (auto player = clients.begin(); player != clients.end(); ++player) {
+            sf::TcpSocket& Splayer = **player; // Получаем указатель на игрока
             sf::Packet packet;
             int status = Player::Status::ready;
-            packet << status;
+            int prevIndex = (tmp - 1 + clients.size()) % clients.size();
+            sf::TcpSocket& prevPlayer = *clients[prevIndex]; 
+            packet << status << prevIndex;
 
-            if (sendPacket(packet, Splayer)) { // Отправляем пакет
+            if (sendPacket(packet, Splayer)) {
                 cout << "Player " << Splayer.getRemoteAddress() << " is ready!" << endl;
             }
             else {
-                cout << "Error: Failed to send ready" << Splayer.getRemoteAddress() << endl;
+                cout << "Error: Failed to send ready " << Splayer.getRemoteAddress() << endl;
             }
-            
             giveCards(Splayer);
-
+            tmp++;
         }
 
         
@@ -409,12 +412,14 @@ public:
                             clients.push_back(client);
                             selector.add(*client);
                             cout << "Received new connection: " << client->getRemoteAddress() << ":" << client->getRemotePort() << endl;
+                            
                         }
                         else {
                             delete client;
                         }
                     }
                 }
+                
             }
             else {
                 break;
@@ -444,9 +449,24 @@ public:
                     int type;
                     packet >> type;
                     if (type == Type::accusation) {
+                        
                         bool lie;
-                        packet >> lie;
+                        int index;
+                        packet >> lie >> index;
                         cout << "Accusation received: " << (lie ? "True" : "False") << endl;
+                        sf::Packet accusation;
+                        for(int i = 0; i < lastQuanityCards; i++){
+                            if (currentDeck.top() != currentCard and !lie) {
+                                lie = true;                
+                                cout << clients[index]->getRemoteAddress() << ":" << clients[index]->getRemotePort() << " is Lied!";
+                            }
+                        }
+                        if (lie) {
+                            accusation << type << lie;
+
+                        }
+                        sendPacket(accusation, client);
+                        
                     }
                     else if (type == Type::place) {
                         packet >> lastQuanityCards;
