@@ -95,6 +95,7 @@ protected:
     int status = Status::waiting;
     sf::IpAddress getIP() const { return this->ip; }
     int getUID() const { return this->uid; }
+    int UIDprev;
     vector<int> getCards() { return cards; }
 
     int getCard(int index) {
@@ -132,6 +133,7 @@ protected:
     void setCards(vector<int> newCards) {
         this->cards = newCards;
     }
+    
 
 public:
     Player(string name, int uid) : name{ name }, uid{ uid } {
@@ -242,6 +244,8 @@ public:
                         data.cards = putCard(cardUses);
                         sendData(data);
                         break;
+                    case 2:
+                        
                     default:
                         break;
                     }
@@ -273,18 +277,26 @@ private:
     void appendDeck(int card) {
         deck.push_back(card);
     }
+
+    
+
     int jCards; // Jack
     int qCards; // Queen
     int kCards; // King
     int aCards; // Ace
     int JCards; // Joker
+    int currentCard; // Верная карта
+
+    int lastQuanityCards;
+    stack<int> currentDeck;
+
 
 public:
     unsigned short int getPort() {
         return port;
     }
     //Name UID maxPlayer
-    Server(string name, int uid, int maxPlayer) : Player(name, uid), maxPlayer{ maxPlayer }, jCards{ 6 }, qCards{ 6 }, kCards{ 6 }, aCards{ 6 }, JCards{ 3 } {
+    Server(string name, int uid, int maxPlayer) : Player(name, uid), maxPlayer{ maxPlayer }, jCards{ 6 }, qCards{ 6 }, kCards{ 6 }, aCards{ 6 }, JCards{ 3 }, lastQuanityCards{ 0 }, currentCard{-1} {
 
         listener.listen(port);
         selector.add(listener);
@@ -355,7 +367,7 @@ public:
     int getCardfromDeck() {
         int copy = deck[0];
         cout << "Get " << cardName(copy) << endl;
-        this->deck.erase(deck.begin());//;
+        this->deck.erase(deck.begin());
         return copy;
     }
 
@@ -367,23 +379,29 @@ public:
             for (int i = 0; i < kCards; i++) appendDeck(KING);
             for (int i = 0; i < aCards; i++) appendDeck(ACE);
             for (int i = 0; i < JCards; i++) appendDeck(JOCKER);
-
+           
             mt19937 rng = default_random_engine(time(NULL));
             shuffle(deck.begin(), deck.end(), rng);
-            for (int card : deck) {
-                cout << cardName(card) << endl;
-            }
+
+            currentCard = rand() % 6;
         }
         return 1;
     }
+    void playerList() {
 
+        cout << "Players: " << clients.size() << endl;
+        
+        for (sf::TcpSocket* player : clients) {
+            cout << player->getRemoteAddress() << ":" << player->getRemotePort() << endl;
+        }
+    }
     void startServer() {
         cout << "Server is listening on port " << port << endl;
         while (true) {
+            system("cls");
+            playerList();
             if (clients.size() != maxPlayer) {
-                cout << clients.size();
                 if (selector.wait(sf::milliseconds(100))) {
-
                     if (selector.isReady(listener)) {
                         cout << "New connection detected" << endl;
                         sf::TcpSocket* client = new sf::TcpSocket;
@@ -403,7 +421,10 @@ public:
             }
 
         }
+        newGame();
+    }
 
+    void newGame() {
         Ready();
         while (true) {
             for (auto Pclient : clients) {
@@ -428,16 +449,14 @@ public:
                         cout << "Accusation received: " << (lie ? "True" : "False") << endl;
                     }
                     else if (type == Type::place) {
-                        int quantity;
-                        packet >> quantity;
-                        cout << quantity;
+                        packet >> lastQuanityCards;
+                        cout << lastQuanityCards;
                         cout << "Received cards: ";
                         int card;
-                        for (int i = 0; i < quantity; i++) {
+                        for (int i = 0; i < lastQuanityCards; i++) {
                             packet >> card;
                             cout << cardName(card) << " | ";
-                            appendDeck(card);
-                            
+                            currentDeck.push(card);
                         }
                         cout << endl;
                     }
@@ -452,6 +471,7 @@ public:
 
         }
     }
+    
 
 };
 
