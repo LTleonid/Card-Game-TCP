@@ -35,16 +35,19 @@ sf::Packet& operator >>(sf::Packet& packet, vector<int>& d) {
 // Содержит JACK, QUEEN, KING, ACE, JOCKER
 enum suite { JACK, QUEEN, KING, ACE, JOCKER };
 // Положил карту | Обвинения
-enum Type { place = 12, accusation = 13, startDeck = 500 };
+enum Type { place = 12, accusation = 13, startDeck = 500, notification = 250 };
 enum gameMode { SERVER = 2, CLIENT = 1 };
 struct Data {
     int type;
     bool accusation;
     vector<int> cards;
     set<int> cardsUses;
+    int indexPlayer;
+    string str;
     Data() : type{ -1 } {}
     Data(int type, bool lie) : type{ type }, accusation{ lie } {}
     Data(int type, vector<int> cards) : type{ type }, cards{ cards } {}
+    Data(int type, string message) : type{ type }, str{ message } {}
     sf::Packet get() {
         sf::Packet p;
         if (type == Type::accusation) {
@@ -55,6 +58,9 @@ struct Data {
         }
         else if (type == Type::startDeck) {
             p << type << cards;
+        }
+        else if (type == Type::notification) {
+            p << type << str;
         }
         else {
             cout << "Error: Undefined Type Data" << endl;
@@ -133,7 +139,7 @@ protected:
     void setCards(vector<int> newCards) {
         this->cards = newCards;
     }
-    
+
 
 public:
     Player(string name, int uid) : name{ name }, uid{ uid } {
@@ -159,10 +165,14 @@ public:
             return;
         cout << "Connected to server " << ip << endl;
         sf::Packet packet;
+        packet << name;
+        if (socket.send(packet) != sf::Socket::Done) {
+            cout << "Error: Failed to send name to server" << endl;
+        }
+        packet.clear();
         if (socket.receive(packet) == sf::Socket::Done) {
             packet >> status >> playerPrev;
         }
-        cout << playerPrev;
     }
 
     // Отправка данных на сервер
@@ -228,7 +238,7 @@ public:
                             cout << "\033[2J";
                             cout << "\033[0;0f";
                             for (int i = 0; i < getCards().size(); i++) {
-                                cout << (cardUses.count(i) ? "\033[38;5;11m"+to_string(i) + ". " : to_string(i)+". ") << cardName(getCards()[i]) << "\033[0m | ";
+                                cout << (cardUses.count(i) ? "\033[38;5;11m" + to_string(i) + ". " : to_string(i) + ". ") << cardName(getCards()[i]) << "\033[0m | ";
                             }
                             cout << endl;
                             cout << "Enter index cards(7 for exit, re-enter for undo): ";
@@ -237,16 +247,16 @@ public:
                             if (cardUses.count(action)) cardUses.erase(action);
                             else {
                                 cardUses.insert(action);
-                                
+
                             }
                         }
-                        
+
                         data.type = Type::place;
                         data.cards = putCard(cardUses);
                         sendData(data);
                         break;
                     case 2:
-                        
+
                     default:
                         break;
                     }
@@ -257,13 +267,14 @@ public:
             }
         }
     }
- };
+};
 
 
 class Server : public Player {
 private:
 
     vector<sf::TcpSocket* > clients{};
+    vector<string> clientsNames{};
     int maxPlayer;
     unsigned short int port = 53000;
 
@@ -279,7 +290,7 @@ private:
         deck.push_back(card);
     }
 
-    
+
 
     int jCards; // Jack
     int qCards; // Queen
@@ -297,7 +308,7 @@ public:
         return port;
     }
     //Name UID maxPlayer
-    Server(string name, int uid, int maxPlayer) : Player(name, uid), maxPlayer{ maxPlayer }, jCards{ 6 }, qCards{ 6 }, kCards{ 6 }, aCards{ 6 }, JCards{ 3 }, lastQuanityCards{ 0 }, currentCard{-1} {
+    Server(string name, int uid, int maxPlayer) : Player(name, uid), maxPlayer{ maxPlayer }, jCards{ 6 }, qCards{ 6 }, kCards{ 6 }, aCards{ 6 }, JCards{ 3 }, lastQuanityCards{ 0 }, currentCard{ -1 } {
 
         listener.listen(port);
         selector.add(listener);
@@ -319,7 +330,7 @@ public:
         return false;
     }
     void Ready() {
-        
+
         InitializationDeck();
         int tmp = 0;
         for (auto player = clients.begin(); player != clients.end(); ++player) {
@@ -327,7 +338,7 @@ public:
             sf::Packet packet;
             int status = Player::Status::ready;
             int prevIndex = (tmp - 1 + clients.size()) % clients.size();
-            sf::TcpSocket& prevPlayer = *clients[prevIndex]; 
+            sf::TcpSocket& prevPlayer = *clients[prevIndex];
             packet << status << prevIndex;
 
             if (sendPacket(packet, Splayer)) {
@@ -340,7 +351,7 @@ public:
             tmp++;
         }
 
-        
+
     }
 
     void giveCards(sf::TcpSocket& player) {
@@ -382,7 +393,7 @@ public:
             for (int i = 0; i < kCards; i++) appendDeck(KING);
             for (int i = 0; i < aCards; i++) appendDeck(ACE);
             for (int i = 0; i < JCards; i++) appendDeck(JOCKER);
-           
+
             mt19937 rng = default_random_engine(time(NULL));
             shuffle(deck.begin(), deck.end(), rng);
 
@@ -393,9 +404,9 @@ public:
     void playerList() {
 
         cout << "Players: " << clients.size() << endl;
-        
-        for (sf::TcpSocket* player : clients) {
-            cout << player->getRemoteAddress() << ":" << player->getRemotePort() << endl;
+
+        for (int i = 0; i < clients.size(); i++) {
+            cout << clientsNames[i] << " | " << clients[i]->getRemoteAddress() << ":" << clients[i]->getRemotePort() << endl;
         }
     }
     void startServer() {
@@ -409,26 +420,32 @@ public:
                         cout << "New connection detected" << endl;
                         sf::TcpSocket* client = new sf::TcpSocket;
                         if (listener.accept(*client) == sf::Socket::Done) {
+
+                            sf::Packet packet;
+                            if (client->receive(packet) == sf::Socket::Done) {
+                                string playerName;
+                                packet >> playerName;
+                                clientsNames.push_back(playerName);
+                            }
                             clients.push_back(client);
                             selector.add(*client);
                             cout << "Received new connection: " << client->getRemoteAddress() << ":" << client->getRemotePort() << endl;
-                            
                         }
                         else {
                             delete client;
                         }
                     }
                 }
-                
             }
             else {
                 break;
             }
-
         }
         newGame();
     }
-
+    void sendAccusation(bool lie, sf::TcpSocket& Rx, sf::TcpSocket& Tx) {
+        // На доработку
+    }
     void newGame() {
         Ready();
         while (true) {
@@ -449,24 +466,20 @@ public:
                     int type;
                     packet >> type;
                     if (type == Type::accusation) {
-                        
+
                         bool lie;
                         int index;
                         packet >> lie >> index;
                         cout << "Accusation received: " << (lie ? "True" : "False") << endl;
                         sf::Packet accusation;
-                        for(int i = 0; i < lastQuanityCards; i++){
+                        for (int i = 0; i < lastQuanityCards; i++) {
                             if (currentDeck.top() != currentCard and !lie) {
-                                lie = true;                
+                                lie = true;
                                 cout << clients[index]->getRemoteAddress() << ":" << clients[index]->getRemotePort() << " is Lied!";
                             }
                         }
-                        if (lie) {
-                            accusation << type << lie;
+                        sendAccusation(lie, client, *clients[index]);
 
-                        }
-                        sendPacket(accusation, client);
-                        
                     }
                     else if (type == Type::place) {
                         packet >> lastQuanityCards;
@@ -491,7 +504,7 @@ public:
 
         }
     }
-    
+
 
 };
 
@@ -522,7 +535,7 @@ int main(int argc, char** argv) {
         std::cout << "Enter mode (1 - Client, 2 - Server): ";
         cin >> u;
         if (u == gameMode::CLIENT) {
-            Player p("PlayerName", 123);
+            Player p(to_string(rand()), 123);
             p.connectServer(sf::IpAddress::getLocalAddress(), 53000);
             p.startGame();
         }
