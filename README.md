@@ -1,7 +1,10 @@
+<img src="https://github.com/user-attachments/assets/7bb467e8-8fac-4790-adee-ac6dd02fee0c" width="20" height="20" />  [Miro](https://miro.com/app/board/uXjVLAn3X6g=/)
+
+
 To-Do:
  - [ ] Терминал для Сервера
  - [X] Починить Player::StartGame
- - [ ] Сделать Miro под проект
+ - [X] Сделать Miro под проект
  - [ ] Интерфейс игрока
  - [ ] Гуи на SFML
  - [ ] Модели для игры
