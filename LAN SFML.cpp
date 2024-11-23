@@ -6,27 +6,31 @@
 #include <stack>
 #include <string>
 using namespace std;
-
+#
 sf::Packet& operator <<(sf::Packet& packet, const vector<int>& d) {
     cout << "PACKET sen: " << (int)d.size() << endl;
     packet << (int)d.size(); // Почему то size не даёт int по умолчанию
     for (int value : d) {
-        cout << "PACKET sen: " << value << endl; // Где то тут пробелма
-        packet << value; // Затем сами элементы
+        #ifdef _DEBUG
+        cout << "PACKET sen: " << value << endl; 
+        #endif //_DEBUG
+        packet << value; 
     }
     return packet;
 }
 
 sf::Packet& operator >>(sf::Packet& packet, vector<int>& d) {
     int size;
-    packet >> size; // Сначала считываем размер
+    packet >> size; 
     cout << "PACKET rec: " << size << endl;
     d.clear();
     for (int i = 0; i < size; ++i) {
         int value;
         packet >> value;
+        #ifdef _DEBUG
         cout << "PACKET rec: " << value << endl;
-        d.push_back(value); // Затем считываем элементы
+        #endif //_DEBUG
+        d.push_back(value);
     }
     return packet;
 }
@@ -35,7 +39,7 @@ sf::Packet& operator >>(sf::Packet& packet, vector<int>& d) {
 // Содержит JACK, QUEEN, KING, ACE, JOCKER
 enum suite { JACK, QUEEN, KING, ACE, JOCKER };
 // Положил карту | Обвинения
-enum Type { place = 12, accusation = 13, startDeck = 500, notification = 250 };
+enum Type { place = 12, accusation = 13, startDeck = 500, notification = 250, Shoot = 62 };
 enum gameMode { SERVER = 2, CLIENT = 1 };
 struct Data {
     int type;
@@ -45,13 +49,13 @@ struct Data {
     int indexPlayer;
     string str;
     Data() : type{ -1 } {}
-    Data(int type, bool lie) : type{ type }, accusation{ lie } {}
+    Data(int type, bool lie, int index) : type{ type }, accusation{ lie }, indexPlayer{ index } {}
     Data(int type, vector<int> cards) : type{ type }, cards{ cards } {}
     Data(int type, string message) : type{ type }, str{ message } {}
     sf::Packet get() {
         sf::Packet p;
         if (type == Type::accusation) {
-            p << type << accusation;
+            p << type << accusation << indexPlayer;
         }
         else if (type == Type::place) {
             p << type << cards;
@@ -187,7 +191,7 @@ public:
         }
     }
 
-    int sendData(Data& data) {
+    int sendData(Data data) {
         sf::Packet packet = data.get();
         if (socket.send(packet) == sf::Socket::Done) {
             return 0;
@@ -208,7 +212,6 @@ public:
             int action;
             set<int> cardUses;
             vector<int> temp;
-            Data data;
             // Получение стартовых карт
             packet = reciveData();
             packet >> type;
@@ -225,7 +228,6 @@ public:
                 coutCards();
                 packet = reciveData();
                 packet >> status;
-                cout << status << endl;
                 if (status == Status::turn) {
                     cout << "Your Action: 1.put cards 2. Say accusation: ";
                     cin >> action;
@@ -250,19 +252,23 @@ public:
 
                             }
                         }
-
-                        data.type = Type::place;
-                        data.cards = putCard(cardUses);
-                        sendData(data);
+                        sendData(Data(Type::place, putCard(cardUses)));
                         break;
                     case 2:
 
+                        sendData(Data(Type::accusation, true, playerPrev));
+                        break;
                     default:
                         break;
                     }
                 }
                 else if (status == Status::waiting) {
                     cout << "Waiting turn" << endl;
+                }
+                else if (status == Type::notification) {
+                    string notif;
+                    packet >> notif;
+                    cout << "Server: " << notif << endl; //TODO: Доработать
                 }
             }
         }
@@ -386,6 +392,7 @@ public:
     }
 
     int InitializationDeck() {
+        
         if (deck.empty()) {
 
             for (int i = 0; i < jCards; i++) appendDeck(JACK);
@@ -396,8 +403,8 @@ public:
 
             mt19937 rng = default_random_engine(time(NULL));
             shuffle(deck.begin(), deck.end(), rng);
+            currentCard = rng() % 5;
 
-            currentCard = rand() % 6;
         }
         return 1;
     }
@@ -443,16 +450,46 @@ public:
         }
         newGame();
     }
-    void sendAccusation(bool lie, sf::TcpSocket& Rx, sf::TcpSocket& Tx) {
-        // На доработку
+    //Не срабатывает для всех
+    void sendAll(sf::Packet& packet) {
+        for (auto player : clients) {
+            sf::TcpSocket& Pplayer = *player;
+            sendPacket(packet, Pplayer);
+        }
+        packet.clear();
     }
+
+    void sendAccusation(bool lie, sf::TcpSocket& Rx, sf::TcpSocket& Tx, int index) {
+        sf::Packet packet;
+        if (lie) {
+            
+            packet << Type::notification << clientsNames[index] + "Is lied!";
+            sendAll(packet);
+            packet << Type::Shoot;
+            sendPacket(packet, Tx);
+            packet.clear();
+        }
+        else {
+            packet << Type::notification << clientsNames[index+1] + "Is make mistakes!";
+            sendAll(packet);
+            packet << Type::Shoot;
+            sendPacket(packet, Rx);
+            packet.clear();
+        }
+    }
+
+   
     void newGame() {
         Ready();
+        cout << "Current Card is " + cardName(this->currentCard) << endl;
+        sf::Packet packet;
+        packet << Type::notification << "Deck Card is " + cardName(this->currentCard);
+        sendAll(packet);
         while (true) {
             for (auto Pclient : clients) {
+                packet.clear();
                 sf::TcpSocket& client = *Pclient;
                 cout << "Checking: " << client.getRemoteAddress() << ":" << client.getRemotePort() << endl;
-                sf::Packet packet;
                 packet << Status::turn;
                 if (sendPacket(packet, client)) {
                     cout << "Turn: " << client.getRemoteAddress() << endl;
@@ -478,7 +515,7 @@ public:
                                 cout << clients[index]->getRemoteAddress() << ":" << clients[index]->getRemotePort() << " is Lied!";
                             }
                         }
-                        sendAccusation(lie, client, *clients[index]);
+                        sendAccusation(lie, client, *clients[index], index);
 
                     }
                     else if (type == Type::place) {
@@ -509,14 +546,39 @@ public:
 };
 
 int main(int argc, char** argv) {
+    srand(time(NULL));
     int u;
     if (argc > 1) {
-        std::string mode = argv[1];
+        string mode = argv[1];
+
         if (mode == "S") {
-            std::string name = argv[2];
-            int maxPlayers = std::stoi(argv[3]);
-            Server s(name, rand(), maxPlayers);
-            s.startServer();
+            string name;
+            int maxPlayers;
+            try {
+                name = argv[2];
+                throw "Error: Not a string!(How)";
+            }
+            catch (string error) {
+                cout << "Error: ";
+                return -1;
+            }
+            try {
+                throw "Not a Number";
+                maxPlayers = stoi(argv[3]); //Нет блин падай, Чё за названия для string->int
+                
+            }
+            catch (string error) {
+                cout << "Error: ";
+                return -1;
+            }
+            try {
+                Server s(name, rand(), maxPlayers);
+                s.startServer();
+            }
+            catch (...) {
+                cout << "Error: Cannot start server!";
+                return -1;
+            }
         }
         else if (mode == "C") {
             std::string name = argv[2];
@@ -540,8 +602,9 @@ int main(int argc, char** argv) {
             p.startGame();
         }
         else if (u == gameMode::SERVER) {
-            Server s("Server", 1, 2); //Name
+            Server s("Server", 1, 2); //Name UID maxPlayer
             s.startServer();
         }
     }
+    return 0;
 }
