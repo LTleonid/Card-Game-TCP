@@ -6,7 +6,7 @@
 #include <stack>
 #include <string>
 using namespace std;
-#
+
 sf::Packet& operator <<(sf::Packet& packet, const vector<int>& d) {
     cout << "PACKET sen: " << (int)d.size() << endl;
     packet << (int)d.size(); // Почему то size не даёт int по умолчанию
@@ -78,7 +78,7 @@ struct Data {
 
 
 
-// Разменование карт по индексу
+// Разыменование карт по индексу
 string cardName(int cardIndex) {
     switch (cardIndex)
     {
@@ -98,7 +98,7 @@ private:
     int uid;
     vector<int> cards;
     sf::TcpSocket socket = sf::TcpSocket();
-
+    bool live;
 protected:
     string name;
     enum Status { ready = 200, turn = 5, waiting = 302 };
@@ -255,9 +255,24 @@ public:
                         sendData(Data(Type::place, putCard(cardUses)));
                         break;
                     case 2:
-
-                        sendData(Data(Type::accusation, true, playerPrev));
+                        while (action != 0 or action != 1) {
+                            cout << "Enter your Choice: 0 - Lie 1 - True : ";
+                            cin >> action;
+                        }
+                        
+                        sendData(Data(Type::accusation, action, playerPrev)); 
+                        packet = reciveData(); 
+                        packet >> type;
+                        if (type == Type::notification) {
+                            string notif;
+                            packet >> notif;
+                            cout << "Server: " << notif << endl;
+                        }
+                        else if (type == Type::Shoot) {
+                            packet >> live;
+                        }
                         break;
+
                     default:
                         break;
                     }
@@ -321,11 +336,11 @@ public:
         listener.setBlocking(true);
 
     }
-    bool sendPacket(sf::Packet& packet, sf::TcpSocket& Rx) {
+    bool sendPacket(sf::Packet& packet, sf::TcpSocket& Rx, bool clear = true) {
         cout << "Send Packet " << packet.getData() << " to " << Rx.getRemoteAddress() << ":" << Rx.getRemotePort() << endl;
         if (Rx.send(packet) == sf::Socket::Done) {
             cout << "Success!" << endl;
-            packet.clear();
+            if(clear) packet.clear();
             return true;
         }
         else {
@@ -454,7 +469,7 @@ public:
     void sendAll(sf::Packet& packet) {
         for (auto player : clients) {
             sf::TcpSocket& Pplayer = *player;
-            sendPacket(packet, Pplayer);
+            sendPacket(packet, Pplayer, false);
         }
         packet.clear();
     }
@@ -467,14 +482,14 @@ public:
             sendAll(packet);
             packet << Type::Shoot;
             sendPacket(packet, Tx);
-            packet.clear();
+
         }
         else {
             packet << Type::notification << clientsNames[index+1] + "Is make mistakes!";
             sendAll(packet);
             packet << Type::Shoot;
             sendPacket(packet, Rx);
-            packet.clear();
+
         }
     }
 
