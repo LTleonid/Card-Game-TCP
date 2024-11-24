@@ -255,7 +255,7 @@ public:
                         sendData(Data(Type::place, putCard(cardUses)));
                         break;
                     case 2:
-                        while (action != 0 or action != 1) {
+                        while (action != 0 && action != 1) {
                             cout << "Enter your Choice: 0 - Lie 1 - True : ";
                             cin >> action;
                         }
@@ -465,7 +465,7 @@ public:
         }
         newGame();
     }
-    //Не срабатывает для всех
+
     void sendAll(sf::Packet& packet) {
         for (auto player : clients) {
             sf::TcpSocket& Pplayer = *player;
@@ -476,6 +476,8 @@ public:
 
     void sendAccusation(bool lie, sf::TcpSocket& Rx, sf::TcpSocket& Tx, int index) {
         sf::Packet packet;
+        
+
         if (lie) {
             
             packet << Type::notification << clientsNames[index] + "Is lied!";
@@ -501,35 +503,46 @@ public:
         packet << Type::notification << "Deck Card is " + cardName(this->currentCard);
         sendAll(packet);
         while (true) {
-            for (auto Pclient : clients) {
+            for (auto Pclient = 0; Pclient < clients.size(); Pclient++) {
                 packet.clear();
-                sf::TcpSocket& client = *Pclient;
+                sf::TcpSocket& client = *clients[Pclient];
                 cout << "Checking: " << client.getRemoteAddress() << ":" << client.getRemotePort() << endl;
+                packet << Type::notification << "Now turn is " + clientsNames[Pclient];
+                sendAll(packet);
                 packet << Status::turn;
+                
                 if (sendPacket(packet, client)) {
                     cout << "Turn: " << client.getRemoteAddress() << endl;
                 }
                 else {
                     cout << "get out " << client.getRemoteAddress();
                 }
+                
                 cout << "Wait card" << endl;
 
                 if (client.receive(packet) == sf::Socket::Done) {
                     int type;
                     packet >> type;
                     if (type == Type::accusation) {
-
                         bool lie;
                         int index;
                         packet >> lie >> index;
                         cout << "Accusation received: " << (lie ? "True" : "False") << endl;
                         sf::Packet accusation;
+                        string wasindeck;
+
                         for (int i = 0; i < lastQuanityCards; i++) {
+                            cout << cardName(currentDeck.top()) << " | " << endl;
                             if (currentDeck.top() != currentCard and !lie) {
                                 lie = true;
                                 cout << clients[index]->getRemoteAddress() << ":" << clients[index]->getRemotePort() << " is Lied!";
                             }
+                            wasindeck += " | " + currentDeck.top();
+                            currentDeck.pop();
                         }
+
+                        packet << Type::notification << "In deck was: " + wasindeck;
+                        sendAll(packet);
                         sendAccusation(lie, client, *clients[index], index);
 
                     }
@@ -543,6 +556,8 @@ public:
                             cout << cardName(card) << " | ";
                             currentDeck.push(card);
                         }
+                        packet <<Type::notification << clientsNames[Pclient] + "is place " + to_string(lastQuanityCards) + cardName(currentCard);
+                        sendAll(packet);
                         cout << endl;
                     }
                     else {
@@ -550,7 +565,7 @@ public:
                     }
                 }
                 else {
-                    cout << "Error: Selector unready" << endl;
+                    cout << "Error: player unreacheble" << endl;
                 }
             }
 
