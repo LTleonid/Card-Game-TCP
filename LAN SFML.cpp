@@ -182,13 +182,14 @@ public:
     // Отправка данных на сервер
     sf::Packet reciveData() {
         sf::Packet packet;
-        if (socket.receive(packet) == sf::Socket::Done) {
-            return packet;
+        while(socket.receive(packet) != sf::Socket::Done) {
+            
         }
-        else {
+        return packet;
+        /*else {
             cout << "Error: Failure recive data" << endl;
             return sf::Packet();
-        }
+        }*/
     }
 
     int sendData(Data data) {
@@ -222,9 +223,11 @@ public:
             else {
                 cout << "Error: Don't get Cards" << endl;
             }
+            socket.setBlocking(false);
 
             while (true)
             {
+                
                 coutCards();
                 packet = reciveData();
                 packet >> status;
@@ -285,6 +288,9 @@ public:
                     packet >> notif;
                     cout << "Server: " << notif << endl; //TODO: Доработать
                 }
+                else {
+                    cout << "Error: unknown status!" << endl;
+                }
             }
         }
     }
@@ -310,8 +316,6 @@ private:
     void appendDeck(int card) {
         deck.push_back(card);
     }
-
-
 
     int jCards; // Jack
     int qCards; // Queen
@@ -502,10 +506,20 @@ public:
         sf::Packet packet;
         packet << Type::notification << "Deck Card is " + cardName(this->currentCard);
         sendAll(packet);
+            
         while (true) {
+            packet << Status::waiting;
             for (auto Pclient = 0; Pclient < clients.size(); Pclient++) {
                 packet.clear();
                 sf::TcpSocket& client = *clients[Pclient];
+                for (int i = 0; i < clients.size(); i++) {
+                    if (clients[i] == clients[Pclient]) {
+                        continue;
+                    }
+                    else {
+                        sendPacket(packet, *clients[i], false);
+                    }
+                }
                 cout << "Checking: " << client.getRemoteAddress() << ":" << client.getRemotePort() << endl;
                 packet << Type::notification << "Now turn is " + clientsNames[Pclient];
                 sendAll(packet);
