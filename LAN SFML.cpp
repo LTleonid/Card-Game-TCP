@@ -93,7 +93,8 @@ string cardName(int cardIndex) {
 
 class Player {
 private:
-
+    bool canAccusation;
+    bool canTurn;
     sf::IpAddress ip;
     int uid;
     vector<int> cards;
@@ -186,10 +187,6 @@ public:
             
         }
         return packet;
-        /*else {
-            cout << "Error: Failure recive data" << endl;
-            return sf::Packet();
-        }*/
     }
 
     int sendData(Data data) {
@@ -232,7 +229,9 @@ public:
                 packet = reciveData();
                 packet >> status;
                 if (status == Status::turn) {
-                    cout << "Your Action: 1.put cards 2. Say accusation: ";
+                    while (canTurn)
+                    packet >> canAccusation;
+                    cout << "Your Action: 1.put cards" << canAccusation? " 2. Say accusation : " : " : ";
                     cin >> action;
                     switch (action)
                     {
@@ -248,12 +247,19 @@ public:
                             cout << endl;
                             cout << "Enter index cards(7 for exit, re-enter for undo): ";
                             cin >> action;
-                            if (action == 7) break;
+                            if (action == 7) {
+                                if (cardUses.empty()) {
+                                    
+                                }
+                                break;
+                            }
+                            
                             if (cardUses.count(action)) cardUses.erase(action);
                             else {
                                 cardUses.insert(action);
 
                             }
+                            
                         }
                         sendData(Data(Type::place, putCard(cardUses)));
                         break;
@@ -506,7 +512,6 @@ public:
         sf::Packet packet;
         packet << Type::notification << "Deck Card is " + cardName(this->currentCard);
         sendAll(packet);
-            
         while (true) {
             packet << Status::waiting;
             for (auto Pclient = 0; Pclient < clients.size(); Pclient++) {
