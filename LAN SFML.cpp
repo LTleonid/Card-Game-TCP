@@ -100,7 +100,7 @@ private:
     sf::TcpSocket socket = sf::TcpSocket();
     bool live;
 protected:
-    string name;
+    string name;,
     enum Status { ready = 200, turn = 5, waiting = 302 };
     int status = Status::waiting;
     sf::IpAddress getIP() const { return this->ip; }
@@ -179,19 +179,33 @@ public:
         }
     }
 
-    // Отправка данных на сервер
-    sf::Packet reciveData() {
-        sf::Packet packet;
-        while(socket.receive(packet) != sf::Socket::Done) {
-            
-        }
-        return packet;
-        /*else {
-            cout << "Error: Failure recive data" << endl;
-            return sf::Packet();
-        }*/
-    }
 
+
+
+    // Отправка данных на сервер
+    int on_recive(sf::Packet& packet) {
+        if (!socket.NotReady) { return 0; }
+        switch (socket.receive(packet))
+        {
+        case sf::Socket::NotReady:
+            if (status != Status::waiting) {
+                status = Status::waiting;
+            }
+            break;
+        case sf::Socket::Done:
+            return 1;
+            break;
+        case sf::Socket::Disconnected:
+            socket.disconnect();
+            return -1;
+            break;
+        default:
+            return 0;
+            break;
+        }
+        return 0;
+    }
+    
     int sendData(Data data) {
         sf::Packet packet = data.get();
         if (socket.send(packet) == sf::Socket::Done) {
@@ -329,6 +343,9 @@ private:
 
 
 public:
+    int on_recive(sf::Packet& packet) {
+
+    }
     unsigned short int getPort() {
         return port;
     }
@@ -570,7 +587,7 @@ public:
                             cout << cardName(card) << " | ";
                             currentDeck.push(card);
                         }
-                        packet <<Type::notification << clientsNames[Pclient] + "is place " + to_string(lastQuanityCards) + cardName(currentCard);
+                        packet << Type::notification << clientsNames[Pclient] + "is place " + to_string(lastQuanityCards) + cardName(currentCard);
                         sendAll(packet);
                         cout << endl;
                     }
@@ -590,6 +607,7 @@ public:
 };
 
 int main(int argc, char** argv) {
+   
     srand(time(NULL));
     int u;
     if (argc > 1) {
